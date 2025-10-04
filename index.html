@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jardín Poético</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #000;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            font-family: 'Courier New', monospace;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+
+        .heart-button {
+            position: relative;
+            z-index: 10;
+            background: rgba(255, 255, 255, 0.05);
+            border: 3px solid #fff;
+            color: #fff;
+            font-size: 48px;
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: all 0.4s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 0 30px rgba(255, 255, 255, 0.1),
+                        inset 0 0 20px rgba(255, 255, 255, 0.05);
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        @media (min-width: 768px) {
+            .heart-button {
+                font-size: 64px;
+                width: 140px;
+                height: 140px;
+            }
+        }
+
+        .heart-button::before {
+            content: '';
+            position: absolute;
+            inset: -5px;
+            border-radius: 50%;
+            padding: 3px;
+            background: linear-gradient(45deg, #ff6b9d, #c06c84, #f67280, #ff6b9d);
+            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor;
+            mask-composite: exclude;
+            opacity: 0;
+            transition: opacity 0.4s ease;
+        }
+
+        .heart-button:hover::before {
+            opacity: 1;
+        }
+
+        .heart-button:hover {
+            transform: scale(1.15);
+            box-shadow: 0 0 40px rgba(255, 107, 157, 0.4),
+                        inset 0 0 30px rgba(255, 255, 255, 0.1);
+            border-color: #ff6b9d;
+        }
+
+        .heart-button:active {
+            transform: scale(1.05);
+        }
+
+        .heart-button.hidden {
+            opacity: 0;
+            pointer-events: none;
+            transform: scale(0.5);
+        }
+
+        .poem-text {
+            position: absolute;
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 11px;
+            font-family: 'Courier New', monospace;
+            pointer-events: none;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+            max-width: 85vw;
+            overflow: hidden;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            line-height: 1.4;
+        }
+
+        @media (min-width: 480px) {
+            .poem-text {
+                font-size: 14px;
+            }
+        }
+
+        @media (min-width: 768px) {
+            .poem-text {
+                font-size: 18px;
+                max-width: none;
+                white-space: nowrap;
+            }
+        }
+
+        .poem-text::after {
+            content: '█';
+            animation: blink 0.8s infinite;
+            margin-left: 2px;
+        }
+
+        .poem-text.complete::after {
+            content: '';
+        }
+
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+    <button class="heart-button" id="heartBtn">&lt;3</button>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const heartBtn = document.getElementById('heartBtn');
+
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        const romanticFragments = [
+            "te amo sin saber cómo, ni cuándo, ni de dónde",
+            "quiero hacer contigo lo que la primavera hace con los cerezos",
+            "me gusta tu mirada, porque me ahogo en ella",
+            "eres quien me hace ver el mundo menos gris",
+            "te quiero para amarte",
+            "en un beso, sabrás todo lo que he callado",
+            "eres mía, eres mía, voy gritando por la tarde",
+            "juntos por siempre, para siempre",
+            "amor mío, si muero y tú no mueres",
+            "y fue a esa edad... llegó la poesía a buscarme",
+            "podrán cortar todas las flores, pero siempre faltara una con S",
+            "te amo como se aman ciertas cosas oscuras",
+            "en el fondo del pecho estamos juntos",
+            "eres mi umbral de luz que me alumbra cada mañana",
+            "sufro cuando no estas conmigo",
+            "se que seras una gran madre, asi como yo quiero ser un padre",
+            "tu eres mi mar",
+            "te amo, mas que mi vida, mas que mi corazón",
+            "caminemos juntos hasta el fin de los tiempos",
+            "ven a mi alma a buscar lo que deseas",
+            "De nadie seré, sólo de ti, hasta que mis huesos se vuelvan ceniza y mi corazón deje de latir"
+        ];
+
+        let petals = [];
+        let isDrawing = false;
+        let centers = [];
+        let poemElements = [];
+
+        class Petal {
+            constructor(centerX, centerY, angle, distance, hue, size, rotation, fadeDelay) {
+                this.centerX = centerX;
+                this.centerY = centerY;
+                this.angle = angle;
+                this.distance = 0;
+                this.targetDistance = distance;
+                this.hue = hue;
+                this.size = size;
+                this.rotation = rotation;
+                this.opacity = 0;
+                this.growing = true;
+                this.fading = false;
+                this.fadeDelay = fadeDelay;
+                this.lifetime = 0;
+                this.dead = false;
+            }
+
+            update() {
+                this.lifetime++;
+                
+                if (this.growing) {
+                    this.distance += 0.5;
+                    this.opacity = Math.min(this.opacity + 0.02, 0.8);
+                    
+                    if (this.distance >= this.targetDistance) {
+                        this.distance = this.targetDistance;
+                        this.growing = false;
+                    }
+                }
+                
+                if (!this.growing && this.lifetime > this.fadeDelay && !this.fading) {
+                    this.fading = true;
+                }
+                
+                if (this.fading) {
+                    this.opacity -= 0.008;
+                    if (this.opacity <= 0) {
+                        this.dead = true;
+                    }
+                }
+            }
+
+            draw() {
+                if (this.dead) return;
+                
+                const x = this.centerX + Math.cos(this.angle) * this.distance;
+                const y = this.centerY + Math.sin(this.angle) * this.distance;
+
+                ctx.save();
+                ctx.globalAlpha = this.opacity;
+                ctx.translate(x, y);
+                ctx.rotate(this.rotation);
+
+                ctx.beginPath();
+                ctx.fillStyle = `hsl(${this.hue}, 85%, 65%)`;
+                ctx.ellipse(0, 0, this.size * 0.4, this.size, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.restore();
+            }
+        }
+
+        function createFlowerCenter() {
+            const margin = 50;
+            const x = margin + Math.random() * (canvas.width - margin * 2);
+            const y = margin + Math.random() * (canvas.height - margin * 2);
+            const baseHue = Math.random() * 360;
+            
+            return { x, y, baseHue };
+        }
+
+        function generatePetalsForFlower(center, flowerIndex) {
+            const layers = 5 + Math.floor(Math.random() * 3);
+            const fadeDelay = 300 + Math.random() * 200;
+            
+            for (let layer = 0; layer < layers; layer++) {
+                const petalsInLayer = 8 + layer * 4;
+                const distance = 15 + layer * 12;
+                
+                for (let i = 0; i < petalsInLayer; i++) {
+                    const angle = (Math.PI * 2 / petalsInLayer) * i + (layer * 0.2);
+                    const hue = (center.baseHue + layer * 15 + i * 2) % 360;
+                    const size = 8 - layer * 0.5;
+                    const rotation = angle + Math.PI / 2;
+                    
+                    const delay = (flowerIndex * 150) + (layer * petalsInLayer + i) * 5;
+                    
+                    setTimeout(() => {
+                        if (isDrawing) {
+                            petals.push(new Petal(center.x, center.y, angle, distance, hue, size, rotation, fadeDelay));
+                        }
+                    }, delay);
+                }
+            }
+
+            setTimeout(() => {
+                if (isDrawing) {
+                    ctx.beginPath();
+                    ctx.fillStyle = `hsl(${(center.baseHue + 40) % 360}, 90%, 50%)`;
+                    ctx.arc(center.x, center.y, 6, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }, (flowerIndex * 150) + (layers * 50));
+        }
+
+        function createTypewriterEffect(text, x, y, delay) {
+            setTimeout(() => {
+                const poemDiv = document.createElement('div');
+                poemDiv.className = 'poem-text';
+                poemDiv.style.left = x + 'px';
+                poemDiv.style.top = y + 'px';
+                document.body.appendChild(poemDiv);
+                poemElements.push(poemDiv);
+
+                let i = 0;
+                function type() {
+                    if (i < text.length) {
+                        poemDiv.textContent = text.substring(0, i + 1);
+                        i++;
+                        setTimeout(type, 50 + Math.random() * 50);
+                    } else {
+                        poemDiv.classList.add('complete');
+                    }
+                }
+                type();
+            }, delay);
+        }
+
+        function animate() {
+            if (isDrawing) {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.02)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                petals.forEach(petal => {
+                    petal.update();
+                    petal.draw();
+                });
+
+                petals = petals.filter(petal => !petal.dead);
+
+                if (petals.length < 500 && Math.random() < 0.05) {
+                    const newCenter = createFlowerCenter();
+                    const nextIndex = centers.length;
+                    centers.push(newCenter);
+                    generatePetalsForFlower(newCenter, nextIndex);
+                }
+
+                requestAnimationFrame(animate);
+            }
+        }
+
+        heartBtn.addEventListener('click', function() {
+            if (!isDrawing) {
+                isDrawing = true;
+                heartBtn.classList.add('hidden');
+                
+                ctx.fillStyle = '#000';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                const isMobile = window.innerWidth < 768;
+                const numFlowers = isMobile ? 8 : 12 + Math.floor(Math.random() * 8);
+                
+                for (let i = 0; i < numFlowers; i++) {
+                    centers.push(createFlowerCenter());
+                }
+
+                centers.forEach((center, index) => {
+                    generatePetalsForFlower(center, index);
+                });
+
+                function createRandomPoem() {
+                    if (isDrawing && poemElements.length < 15) {
+                        const isMobile = window.innerWidth < 768;
+                        const margin = isMobile ? 10 : 50;
+                        const maxWidth = isMobile ? 250 : 400;
+                        const x = margin + Math.random() * Math.max(10, canvas.width - maxWidth - margin);
+                        const y = margin + Math.random() * Math.max(10, canvas.height - 100);
+                        const text = romanticFragments[Math.floor(Math.random() * romanticFragments.length)];
+                        createTypewriterEffect(text, x, y, 0);
+                    }
+                    
+                    if (isDrawing) {
+                        setTimeout(createRandomPoem, 5000 + Math.random() * 3000);
+                    }
+                }
+                
+                setTimeout(createRandomPoem, 3000);
+
+                animate();
+            }
+        });
+
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        });
+    </script>
+</body>
+</html>
